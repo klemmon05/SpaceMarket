@@ -76,7 +76,6 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
             <div key={step} className="flex items-center gap-1 flex-1">
               <div className={`h-0.5 flex-1 ${i === 0 ? "hidden" : i <= currentStep ? "bg-white" : "bg-white/20"}`} />
               <div className={`w-2 h-2 rounded-full shrink-0 ${i <= currentStep ? "bg-white" : "bg-white/20"}`} />
-              {i === statusSteps.length - 1 && <div className="h-0.5 flex-1 hidden" />}
             </div>
           ))}
         </div>
