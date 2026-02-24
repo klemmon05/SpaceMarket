@@ -4,21 +4,25 @@ import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 export async function getUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) return null;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) return null;
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-    include: {
-      orgMembers: {
-        include: { org: true }
+    const dbUser = await prisma.user.findUnique({
+      where: { supabaseId: user.id },
+      include: {
+        orgMembers: {
+          include: { org: true }
+        }
       }
-    }
-  });
+    });
 
-  return dbUser;
+    return dbUser;
+  } catch {
+    return null;
+  }
 }
 
 export async function requireAuth() {
