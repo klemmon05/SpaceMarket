@@ -1,0 +1,333 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  supabaseId String  @unique
+  email     String   @unique
+  name      String?
+  role      Role     @default(BUYER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orgMembers OrganizationMember[]
+  messages   Message[]
+  adminNotes AdminNote[]
+  followUps  FollowUp[]
+  auditLogs  AuditLog[]
+  notifications Notification[]
+  matches    Match[]
+
+  @@index([supabaseId])
+  @@index([email])
+}
+
+enum Role {
+  BUYER
+  PROVIDER
+  ADMIN
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  type        OrgType
+  website     String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members       OrganizationMember[]
+  providerProfile ProviderProfile?
+  buyerProfile    BuyerProfile?
+  payloads        Payload[]
+  opportunities   LaunchOpportunity[]
+  requests        ReservationRequest[]
+}
+
+enum OrgType {
+  BUYER
+  PROVIDER
+}
+
+model OrganizationMember {
+  id         String    @id @default(uuid())
+  userId     String
+  orgId      String
+  roleInOrg  OrgRole   @default(MEMBER)
+  createdAt  DateTime  @default(now())
+
+  user User         @relation(fields: [userId], references: [id])
+  org  Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([userId, orgId])
+  @@index([userId])
+  @@index([orgId])
+}
+
+enum OrgRole {
+  OWNER
+  MEMBER
+}
+
+model ProviderProfile {
+  id                 String   @id @default(uuid())
+  orgId              String   @unique
+  verificationStatus String   @default("PENDING")
+  pointOfContact     String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id])
+}
+
+model BuyerProfile {
+  id        String   @id @default(uuid())
+  orgId     String   @unique
+  industry  String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id])
+}
+
+model Payload {
+  id                  String   @id @default(uuid())
+  orgId               String
+  name                String
+  massKg              Float
+  volumeU             Float?
+  dimsCm              String?
+  powerW              Float?
+  dataHandling        String?
+  regulatoryFlags     String[]
+  desiredOrbit        String?
+  earliestReadiness   DateTime?
+  latestReadiness     DateTime?
+  targetLaunchWindow  String?
+  specialConstraints  String?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  org      Organization         @relation(fields: [orgId], references: [id])
+  requests ReservationRequest[]
+
+  @@index([orgId])
+}
+
+model LaunchOpportunity {
+  id                 String            @id @default(uuid())
+  providerOrgId      String
+  vehicle            String
+  missionName        String
+  launchSite         String
+  launchWindowStart  DateTime
+  launchWindowEnd    DateTime
+  orbitRegime        String
+  altitudeKm         Float?
+  inclinationDeg     Float?
+  dispenserType      String?
+  maxMassKg          Float?
+  maxVolume          Float?
+  constraints        Json?
+  priceGuidanceUsd   Float?
+  capacityRemaining  Int               @default(1)
+  status             OpportunityStatus @default(DRAFT)
+  itarNotes          String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  providerOrg Organization         @relation(fields: [providerOrgId], references: [id])
+  requests    ReservationRequest[]
+  matches     Match[]
+
+  @@index([providerOrgId])
+  @@index([status])
+  @@index([launchWindowStart])
+}
+
+enum OpportunityStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  CLOSED
+}
+
+model ReservationRequest {
+  id                   String        @id @default(uuid())
+  buyerOrgId           String
+  payloadId            String
+  opportunityId        String?
+  requestedWindowStart DateTime?
+  requestedWindowEnd   DateTime?
+  status               RequestStatus @default(DRAFT)
+  priority             String        @default("NORMAL")
+  notes                String?
+  tags                 String[]
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  buyerOrg     Organization       @relation(fields: [buyerOrgId], references: [id])
+  payload      Payload            @relation(fields: [payloadId], references: [id])
+  opportunity  LaunchOpportunity? @relation(fields: [opportunityId], references: [id])
+  match        Match?
+  thread       MessageThread?
+  adminNotes   AdminNote[]
+  followUps    FollowUp[]
+  payment      Payment?
+  notifications Notification[]
+
+  @@index([buyerOrgId])
+  @@index([opportunityId])
+  @@index([status])
+}
+
+enum RequestStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  MATCHED
+  READY_FOR_DEPOSIT
+  DEPOSIT_AUTHORIZED
+  RESERVED
+  LAUNCHED
+  COMPLETED
+  CANCELLED
+}
+
+model Match {
+  id              String   @id @default(uuid())
+  requestId       String   @unique
+  opportunityId   String
+  matchedByAdminId String
+  matchedAt       DateTime @default(now())
+
+  request     ReservationRequest @relation(fields: [requestId], references: [id])
+  opportunity LaunchOpportunity  @relation(fields: [opportunityId], references: [id])
+  admin       User               @relation(fields: [matchedByAdminId], references: [id])
+}
+
+model MessageThread {
+  id        String   @id @default(uuid())
+  requestId String   @unique
+  createdAt DateTime @default(now())
+
+  request  ReservationRequest @relation(fields: [requestId], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id           String            @id @default(uuid())
+  threadId     String
+  senderUserId String
+  visibility   MessageVisibility @default(ALL)
+  body         String
+  createdAt    DateTime          @default(now())
+
+  thread MessageThread @relation(fields: [threadId], references: [id])
+  sender User          @relation(fields: [senderUserId], references: [id])
+
+  @@index([threadId])
+}
+
+enum MessageVisibility {
+  ALL
+  ADMIN_PROVIDER
+  ADMIN_ONLY
+}
+
+model AdminNote {
+  id           String   @id @default(uuid())
+  requestId    String
+  authorUserId String
+  body         String
+  createdAt    DateTime @default(now())
+
+  request ReservationRequest @relation(fields: [requestId], references: [id])
+  author  User               @relation(fields: [authorUserId], references: [id])
+
+  @@index([requestId])
+}
+
+model FollowUp {
+  id           String    @id @default(uuid())
+  requestId    String
+  authorUserId String
+  done         Boolean   @default(false)
+  doneAt       DateTime?
+  method       String?
+  contacted    String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  request ReservationRequest @relation(fields: [requestId], references: [id])
+  author  User               @relation(fields: [authorUserId], references: [id])
+
+  @@index([requestId])
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  requestId             String        @unique
+  stripePaymentIntentId String        @unique
+  amount                Int
+  currency              String        @default("usd")
+  status                PaymentStatus @default(REQUIRES_ACTION)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  request ReservationRequest @relation(fields: [requestId], references: [id])
+
+  @@index([stripePaymentIntentId])
+}
+
+enum PaymentStatus {
+  REQUIRES_ACTION
+  AUTHORIZED
+  CAPTURED
+  VOIDED
+  REFUNDED
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  requestId String?
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user    User                @relation(fields: [userId], references: [id])
+  request ReservationRequest? @relation(fields: [requestId], references: [id])
+
+  @@index([userId])
+  @@index([readAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+}
